@@ -25,7 +25,7 @@ for lines in open(os.path.join(base_path, 'cars_annos.txt')):
             os.makedirs(ddr)
         shutil.move(file_path, ddr + '/' + fname)
 
-try:
-    os.rmdir(os.path.join(base_path, 'car_ims'))
-except Exception as e:
-    print (e)
+# try:
+#     os.rmdir(os.path.join(base_path, 'car_ims'))
+# except Exception as e:
+#     print (e)

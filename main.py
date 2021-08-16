@@ -216,6 +216,8 @@ def main():
     elif args.loss.lower() == 'Proxy_NCA'.lower():
         criterion = loss.Proxy_NCA(args.dim, args.C, scale=args.scale,
                                    ps_mu=args.ps_mu, ps_alpha=args.ps_alpha).cuda()
+    elif args.loss.lower() == 'Proxy_NCA_prob'.lower():
+        criterion = loss.ProxyNCA_prob(args.C, args.dim, scale=args.scale).cuda()
     else:
         raise ValueError("{} is not supported loss name".format(args.loss))
 
@@ -236,14 +238,23 @@ def main():
         cudnn.benchmark = True
 
     ## do train and test!
-    metric_list = ['Recall_1', 'RP', 'MAP']
+    metric_list = ['Recall_1', 'Recall_2', 'Recall_4', 'Recall_8', 'RP', 'MAP']
     best_dict = {'Recall_1': 0.0,
+                 'Recall_2': 0.0,
+                 'Recall_4': 0.0,
+                 'Recall_8': 0.0,
                  'RP': 0.0,
                  'MAP': 0.0}
     best_check = {'Recall_1': False,
+                  'Recall_2': False,
+                  'Recall_4': False,
+                  'Recall_8': False,
                   'RP': False,
                   'MAP': False}
     current_dict = {'Recall_1': 0.0,
+                    'Recall_2': 0.0,
+                    'Recall_4': 0.0,
+                    'Recall_8': 0.0,
                     'RP': 0.0,
                     'MAP': 0.0}
     
@@ -314,7 +325,7 @@ def main():
         if epoch % args.check_epoch == 0:
             nmi, recall, RP, MAP, features, labels = validate(test_loader, model, pooling, embedding, k_list, args)
             print(
-                'Recall@1: {recall[0]:.4f}; RP: {RP:.4f}; MAP: {MAP:.4f} \n'.format(
+                'Recall@1: {recall[0]:.4f}; Recall@2: {recall[1]:.4f}; Recall@4: {recall[2]:.4f}; Recall@8: {recall[3]:.4f}; RP: {RP:.4f}; MAP: {MAP:.4f} \n'.format(
                     recall=recall, RP=RP, MAP=MAP))
 
             if args.eval_best:
@@ -327,6 +338,9 @@ def main():
             writer.add_scalar('eval/RP', RP, epoch)
             writer.add_scalar('eval/MAP', MAP, epoch)
             current_dict['Recall_1'] = recall[0]
+            current_dict['Recall_2'] = recall[1]
+            current_dict['Recall_4'] = recall[2]
+            current_dict['Recall_8'] = recall[3]
             current_dict['RP'] = RP
             current_dict['MAP'] = MAP
 
