@@ -22,20 +22,18 @@ import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 
 import net
 import loss
 import utils
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+# os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
 parser = argparse.ArgumentParser(description='PyTorch Training')
-parser.add_argument('--data', help='path to dataset')
-parser.add_argument('--data_name', default=None, type=str,
-                    help='dataset name')
-parser.add_argument('--save_path', default=None, type=str,
-                    help='where your models will be saved')
+
+
 parser.add_argument('--max_to_keep', default=1, type=int,
                     help='how many keep your saved models')
 parser.add_argument('--check_epoch', default=5, type=int,
@@ -46,31 +44,19 @@ parser.add_argument('--epochs', default=50, type=int,
                     help='number of total epochs to run')
 parser.add_argument('--start_epoch', default=0, type=int,
                     help='manual epoch number')
-parser.add_argument('-b', '--batch_size', default=128, type=int,
-                    help='mini-batch size')
 parser.add_argument('--modellr', default=0.0001, type=float,
                     help='initial model learning rate')
-parser.add_argument('--centerlr', default=0.01, type=float,
-                    help='initial center learning rate')
 parser.add_argument('--wd', '--weight_decay', default=1e-4, type=float,
                     help='weight decay', dest='weight_decay')
-parser.add_argument('--gpu', default=None, type=int,
-                    help='GPU id to use.')
 parser.add_argument('--eps', default=0.01, type=float,
                     help='epsilon for Adam')
 parser.add_argument('--decay_rate', default=0.1, type=float,
                     help='decay rate')
-parser.add_argument('--decay_step', default=20, type=int,
+parser.add_argument('--decay_step', default=50, type=int,
                     help='decay step')
-parser.add_argument('--decay_stop', default=100000, type=int,
+parser.add_argument('--decay_stop', default=50, type=int,
                     help='decay stop')
-parser.add_argument('--dim', default=64, type=int,
-                    help='dimensionality of embeddings')
-parser.add_argument('--freeze_BN', action='store_true',
-                    help='freeze bn')
-parser.add_argument('-C', default=98, type=int,
-                    help='C')
-parser.add_argument('--backbone', default='bninception', type=str,
+parser.add_argument('--backbone', default='resnet50', type=str, #TODO: change this
                     help='bninception, resnet18, resnet34, resnet50, resnet101')
 parser.add_argument('--pooling_type', default='GAP', type=str,
                     help='GAP | GMP | GAP,GMP')
@@ -86,8 +72,6 @@ parser.add_argument('--warmup', default=0, type=int,
                     help='after warmup epoch, backbone also trained')
 parser.add_argument('--input_size', default=224, type=int,
                     help='the size of input batch')
-parser.add_argument('--do_nmi', action='store_true',
-                    help='do nmi or not')
 parser.add_argument('--n_instance', default=1, type=int,
                     help='n_instance')
 parser.add_argument('--early_stop_epoch', default=0, type=int,
@@ -96,19 +80,28 @@ parser.add_argument('--use_amp', default=False, type=lambda s: s.lower() in ['tr
                     help='Use AMP')
 parser.add_argument('--deterministic', default=False, type=lambda s: s.lower() in ['true', 't', 'yes', '1'],
                     help='Deterministic experiments')
-parser.add_argument('--loss', default='SoftMax_vanilla', type=str,
-                    help='loss you want')
-parser.add_argument('--scale', default=1.0, type=float,
-                    help='scale for softmax variations')
-parser.add_argument('--ps_mu', default=0.0, type=float,
-                    help='generation ratio in proxy synthesis')
-parser.add_argument('--ps_alpha', default=0.0, type=float,
-                    help='alpha for beta distribution in proxy synthesis')
+
+
+parser.add_argument('--centerlr', default=0.001, type=float, help='initial center learning rate')
+parser.add_argument('--loss', default='Proxy_NCA', type=str, help='loss you want')
+parser.add_argument('--do_nmi', default=False, action='store_true', help='do nmi or not')
+parser.add_argument('--dim', default=2048, type=int, help='dimensionality of embeddings')
+parser.add_argument('--freeze_BN', default=True, action='store_true', help='freeze bn')
+parser.add_argument('-C', default=107, type=int, help='C')
+parser.add_argument('--data', default='/home/ruofan/PycharmProjects/dml_cross_entropy/data/logo2k_super100', help='path to dataset')
+parser.add_argument('--data_name', default='logo2k_super100', type=str, help='dataset name')
+parser.add_argument('--scale', default=12.0, type=float, help='scale for softmax variations')
+parser.add_argument('--ps_mu', default=1.0, type=float, help='generation ratio in proxy synthesis')
+parser.add_argument('--ps_alpha', default=0.4, type=float, help='alpha for beta distribution in proxy synthesis')
+parser.add_argument('--save_path', default='logs/logo2k_super100_PS_ProxyNCA',
+                    type=str, help='where your models will be saved')
+parser.add_argument('--gpu', default=1, type=int, help='GPU id to use.')
+parser.add_argument('-b', '--batch_size', default=128, type=int, help='mini-batch size')
 
 
 def main():
     args = parser.parse_args()
-
+    '''Set number of classes'''
     if args.data_name.lower() in ["car", "cars", "cars196"]:
         args.C = 98
     elif args.data_name.lower() in ["sop", "stanfordonlineproducts"]:
@@ -120,6 +113,7 @@ def main():
     else:
         print("Using custom dataset")
 
+    '''Set random seed'''
     if args.deterministic:
         torch.manual_seed(0)
         torch.backends.cudnn.deterministic = True
@@ -159,19 +153,20 @@ def main():
 
     train_loader = utils.call_train_loader(traindir, args,
                                                    transforms.Compose([
-                                                       transforms.Lambda(utils.RGB2BGR),
+                                                       # transforms.Lambda(utils.RGB2BGR),
                                                        transforms.RandomResizedCrop(args.input_size),
                                                        transforms.RandomHorizontalFlip(),
                                                        transforms.ToTensor(),
-                                                       transforms.Lambda(lambda x: x.mul(scale_value)),
+                                                       # transforms.Lambda(lambda x: x.mul(scale_value)),
                                                        normalize,
                                                    ]))
     
-    test_transforms = transforms.Compose([transforms.Lambda(utils.RGB2BGR),
+    test_transforms = transforms.Compose([
+                                          # transforms.Lambda(utils.RGB2BGR),
                                           transforms.Resize(256),
                                           transforms.CenterCrop(args.input_size),
                                           transforms.ToTensor(),
-                                          transforms.Lambda(lambda x: x.mul(scale_value)),
+                                          # transforms.Lambda(lambda x: x.mul(scale_value)),
                                           normalize,])
     test_image = datasets.ImageFolder(testdir, test_transforms)
 
@@ -196,7 +191,7 @@ def main():
             print('check you inshop DB')
             exit()
 
-    ## create model
+    '''Create model'''
     # define backbone
     if args.backbone == 'bninception':
         model = net.bninception().cuda()
@@ -236,14 +231,23 @@ def main():
         cudnn.benchmark = True
 
     ## do train and test!
-    metric_list = ['Recall_1', 'RP', 'MAP']
+    metric_list = ['Recall_1', 'Recall_2', 'Recall_4', 'Recall_8', 'RP', 'MAP']
     best_dict = {'Recall_1': 0.0,
+                 'Recall_2': 0.0,
+                 'Recall_4': 0.0,
+                 'Recall_8': 0.0,
                  'RP': 0.0,
                  'MAP': 0.0}
     best_check = {'Recall_1': False,
+                  'Recall_2': 0.0,
+                  'Recall_4': 0.0,
+                  'Recall_8': 0.0,
                   'RP': False,
                   'MAP': False}
     current_dict = {'Recall_1': 0.0,
+                    'Recall_2': 0.0,
+                    'Recall_4': 0.0,
+                    'Recall_8': 0.0,
                     'RP': 0.0,
                     'MAP': 0.0}
     
@@ -279,7 +283,8 @@ def main():
 
 
     if not args.eval_best:
-        writer = SummaryWriter(args.save_path)
+        # writer = SummaryWriter(args.save_path)
+        pass
     else:
         args.epochs = 1000000
 
@@ -307,32 +312,39 @@ def main():
 
         # train for one epoch
         if not args.eval_best:
-            global_step = train(train_loader, model, pooling, embedding, criterion, optimizer, writer, global_step,
+            global_step = train(train_loader, model, pooling, embedding, criterion, optimizer,
+                                # writer,
+                                global_step,
                                 epoch, scaler, autocast, args)
 
         # evaluate on validation set
         if epoch % args.check_epoch == 0:
             nmi, recall, RP, MAP, features, labels = validate(test_loader, model, pooling, embedding, k_list, args)
             print(
-                'Recall@1: {recall[0]:.4f}; RP: {RP:.4f}; MAP: {MAP:.4f} \n'.format(
+                'Recall@1: {recall[0]:.4f}; Recall@2: {recall[1]:.4f}; Recall@4: {recall[2]:.4f}; Recall@8: {recall[3]:.4f}; RP: {RP:.4f}; MAP: {MAP:.4f} \n'.format(
                     recall=recall, RP=RP, MAP=MAP))
 
             if args.eval_best:
                 print('Evaluation of best saved model is done')
                 exit()
 
-            for k_idx, k in enumerate(k_list):
-                writer.add_scalar('eval/Recall_%d' % k, recall[k_idx], epoch)
-                writer.flush()
-            writer.add_scalar('eval/RP', RP, epoch)
-            writer.add_scalar('eval/MAP', MAP, epoch)
+            # for k_idx, k in enumerate(k_list):
+                # writer.add_scalar('eval/Recall_%d' % k, recall[k_idx], epoch)
+                # writer.flush()
+            # writer.add_scalar('eval/RP', RP, epoch)
+            # writer.add_scalar('eval/MAP', MAP, epoch)
             current_dict['Recall_1'] = recall[0]
+            current_dict['Recall_2'] = recall[1]
+            current_dict['Recall_4'] = recall[2]
+            current_dict['Recall_8'] = recall[3]
             current_dict['RP'] = RP
             current_dict['MAP'] = MAP
 
             if args.save_path is not None:
                 # TODO check best_dict / best_check / current_dict
-                early_stop_count = check_best(best_dict, best_check, current_dict, metric_list, early_stop_count, writer, epoch)
+                early_stop_count = check_best(best_dict, best_check, current_dict, metric_list, early_stop_count,
+                                              # writer,
+                                              epoch)
                 if early_stop_count == args.early_stop_epoch and args.early_stop_epoch != 0:
                     print(
                         'Exit training due to no performance increase for {} epochs'.format(args.early_stop_epoch))
@@ -347,7 +359,7 @@ def main():
                               'optimizer': optimizer.state_dict(),
                               'global_step': global_step}
 
-                save_checkpoint(save_state, best_check, args.max_to_keep, args.save_path, writer)
+                save_checkpoint(save_state, best_check, args.max_to_keep, args.save_path)
 
             best_str = 'Best'
             for metric_name in metric_list:
@@ -356,7 +368,8 @@ def main():
             print('')
     
 
-def check_best(best_dict, best_check, current_dict, metric_list, early_stop_count, writer, epoch):
+def check_best(best_dict, best_check, current_dict, metric_list, early_stop_count,
+               epoch):
     '''
     metric_list = ['Recall_1', 'RP', 'MAP']
     writer = Tensorboard wirter
@@ -366,9 +379,9 @@ def check_best(best_dict, best_check, current_dict, metric_list, early_stop_coun
             best_check[metric_name] = True
             best_dict[metric_name] = current_dict[metric_name]
             early_stop_count = -1
-            writer.add_scalar('eval/%s_best' % metric_name, best_dict[metric_name], epoch)
-            writer.add_scalar('eval_best/%s_best' % metric_name, best_dict[metric_name], epoch)
-            writer.flush()
+            # writer.add_scalar('eval/%s_best' % metric_name, best_dict[metric_name], epoch)
+            # writer.add_scalar('eval_best/%s_best' % metric_name, best_dict[metric_name], epoch)
+            # writer.flush()
         else:
             best_check[metric_name] = False
     
@@ -383,7 +396,8 @@ def swap_idx(array, now_, next_):
     return array
 
 
-def train(train_loader, model, pooling, embedding, criterion, optimizer, writer, global_step, epoch, scaler,
+def train(train_loader, model, pooling, embedding, criterion, optimizer,
+          global_step, epoch, scaler,
           autocast, args):
     # switch to train mode
     model.train()
@@ -450,9 +464,9 @@ def train(train_loader, model, pooling, embedding, criterion, optimizer, writer,
 
         if i % 10 == 0:
             print('[%d/%d] loss: %.4f' % (i + 1, total_iter, loss.item()))
-            writer.add_scalar('train/loss', loss, global_step)
-            writer.add_scalar('train/learning_rate', optimizer.param_groups[0]['lr'], global_step)
-            writer.flush()
+            # writer.add_scalar('train/loss', loss, global_step)
+            # writer.add_scalar('train/learning_rate', optimizer.param_groups[0]['lr'], global_step)
+            # writer.flush()
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
@@ -495,24 +509,28 @@ def validate(test_loader, model, pooling, embedding, k_list, args):
             testdata_l2 = torch.cat((testdata_l2, output_l2.cpu()), 0)
             testlabel = torch.cat((testlabel, target))
 
-    features = testdata.numpy()
-    features_l2 = testdata_l2.numpy()
-    labels = testlabel.numpy()
+    features = testdata.cpu().numpy().astype('float32')
+    features_l2 = testdata_l2.cpu().numpy().astype('float32')
+    labels = testlabel.cpu().numpy().astype('float32')
     nmi, recall, RP, MAP = utils.evaluation(features_l2, labels, k_list, args)
 
     return nmi, recall, RP, MAP, features, labels
 
 
 def adjust_learning_rate(optimizer, epoch, args):
+    '''
+    StepLR decay
+    '''
     if epoch % args.decay_step == 0 and epoch <= args.decay_stop:
         for param_group in optimizer.param_groups:
             param_group['lr'] *= args.decay_rate
             print(param_group['lr'])
 
 
-def save_checkpoint(state, best_check, max_to_keep, save_path, writer, filename='model.pth'):
+def save_checkpoint(state, best_check, max_to_keep, save_path,
+                    filename='model.pth'):
     '''
-    save_path = args.save_path #folder
+    save checkpoint
     '''
     filename = filename.replace('.pth', '_%05d.pth' % state['epoch'])
     if not os.path.exists(save_path):
