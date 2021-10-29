@@ -64,8 +64,6 @@ parser.add_argument('--optimizer', default='adam', type=str,
                     help='adam | adamw')
 parser.add_argument('--eval_best', action='store_true',
                     help='eval best saved model')
-parser.add_argument('--k_list', default='1,2,4,8', type=str,
-                    help='Recall@k list')
 parser.add_argument('--clip_grad', default=0, type=int,
                     help='1: turn-on clip_grad, 0: turn-off clip_grad')
 parser.add_argument('--warmup', default=0, type=int,
@@ -80,23 +78,25 @@ parser.add_argument('--use_amp', default=False, type=lambda s: s.lower() in ['tr
                     help='Use AMP')
 parser.add_argument('--deterministic', default=False, type=lambda s: s.lower() in ['true', 't', 'yes', '1'],
                     help='Deterministic experiments')
-
-
 parser.add_argument('--centerlr', default=0.001, type=float, help='initial center learning rate')
-parser.add_argument('--loss', default='Proxy_NCA', type=str, help='loss you want')
 parser.add_argument('--do_nmi', default=False, action='store_true', help='do nmi or not')
-parser.add_argument('--dim', default=2048, type=int, help='dimensionality of embeddings')
 parser.add_argument('--freeze_BN', default=True, action='store_true', help='freeze bn')
-parser.add_argument('-C', default=107, type=int, help='C')
-parser.add_argument('--data', default='/home/ruofan/PycharmProjects/dml_cross_entropy/data/logo2k_super100', help='path to dataset')
-parser.add_argument('--data_name', default='logo2k_super100', type=str, help='dataset name')
 parser.add_argument('--scale', default=12.0, type=float, help='scale for softmax variations')
-parser.add_argument('--ps_mu', default=1.0, type=float, help='generation ratio in proxy synthesis')
 parser.add_argument('--ps_alpha', default=0.4, type=float, help='alpha for beta distribution in proxy synthesis')
-parser.add_argument('--save_path', default='logs/logo2k_super100_PS_ProxyNCA',
+parser.add_argument('--ps_mu', default=1.0, type=float, help='generation ratio in proxy synthesis')
+parser.add_argument('--k_list', default='1,2,4,8', type=str,
+                    help='Recall@k list')
+
+parser.add_argument('-b', '--batch_size', default=32, type=int, help='mini-batch size')
+parser.add_argument('--dim', default=512, type=int, help='dimensionality of embeddings')
+parser.add_argument('--loss', default='Proxy_NCA', type=str, help='loss you want')
+parser.add_argument('-C', default=1171, type=int, help='C')
+parser.add_argument('--data', default='/home/ruofan/PycharmProjects/SoftTriple/datasets/logo2k', help='path to dataset')
+parser.add_argument('--data_name', default='logo2k', type=str, help='dataset name')
+parser.add_argument('--save_path', default='logs/logo2k_512_ProxyNCA',
                     type=str, help='where your models will be saved')
 parser.add_argument('--gpu', default=1, type=int, help='GPU id to use.')
-parser.add_argument('-b', '--batch_size', default=128, type=int, help='mini-batch size')
+
 
 
 def main():
